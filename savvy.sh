@@ -30,17 +30,17 @@ if [[ $1 == 'startup' ]]; then
     SSID3="EMSETUP" #customer setup wifi
     PASS3="ELECTRICMIRROR" #customer setup password
     if [[ -s /home/savvy/customer_info ]]; then
-        SSID2="$(grep ssid /home/savvy/customer_info | awk -F : '{print $2}')" #customer wifi ssid
-        PASS2="$(grep wifiPassword /home/savvy/customer_info | awk -F : '{print $2}')" #customer wifi password
+        SSID2="$(jq .ssid /home/savvy/customer_info | sed 's/^\"//; s/\"$//')" #customer wifi ssid
+        PASS2="$(jq .wifiPassword /home/savvy/customer_info | sed 's/^\"//; s/\"$//')" #customer wifi password
         if [[ "$SSID2" = 'fake' ]]; then
             SSID2=''
             PASS2=''
         fi
     fi
-    
+
     #define variable for wifi dongle ifname
     DONGLE=`nmcli device | grep 'wifi ' | awk '{print $1}'`
-    
+
     wificleanup () {
         #removes all nmcli wifi connections
         CURWIFI=$(nmcli con show | grep wifi | awk -F "  " '{print $1}' | sed 1q)
@@ -50,21 +50,19 @@ if [[ $1 == 'startup' ]]; then
             CURWIFI=$(nmcli con show | grep wifi | awk -F "  " '{print $1}' | sed 1q)
         done
     }
-    
+
     setupwifi () {
         #add SSID and password information to network manager
-        nmcli con add con-name "$1" ifname $DONGLE type wifi ssid "$1"
-        nmcli con modify "$1" wifi-sec.key-mgmt wpa-psk
-        nmcli con modify "$1" wifi-sec.psk "$2"
-    
+        nmcli con add con-name "$1" ifname $DONGLE type wifi ssid "$1" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$2"
+
         sleep 2
-    
+
         #if third argument exists, connect to this wifi immediately (may not work reliably with dongle)
         if [ $3 ]; then
             nmcli con up "$1"
         fi
     }
-    
+
     logcleanup () {
         #trim file ($1) to last n ($2) lines 
         if [[ -s $1 ]]; then
@@ -72,7 +70,7 @@ if [[ $1 == 'startup' ]]; then
             mv -f $1-tmp $1
         fi
     }
-    
+
     nohangfirefox () {
         #check if firefox directory exists
         FFPATH=$(find /home/savvy/.mozilla/firefox* -type d -name *default-esr* 2>/dev/null)
@@ -152,14 +150,14 @@ if [[ $1 == 'network_status' ]]; then
             if [[ "$SSID2" ]]; then
                 #check if SSID2 is broadcasting and visible
                 WIFIVAR=$(nmcli device wifi list | grep "$SSID2")
-    
+
                 if [ "$WIFIVAR" ]; then
                     nmcli con up "$SSID2"
                     sleep 3
                 else
                     echo "wifi SSID $SSID2 not visible"
                 fi
-    
+
             NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
                 #if network is now available restart device
                 if [[ "$NETWORK" ]]; then
@@ -183,7 +181,7 @@ fi
 if [[ $1 == 'update' ]]; then
     #updatefile $1=filename $2=permissions $3=path to replacement file $4=path to file to be replaced
     updatefile () {
-    
+
     if [ -f $3$1 ]; then
         if [ -f $4$1 ]; then
             #if both files exist, compare them
@@ -220,17 +218,17 @@ if [[ $1 == 'update' ]]; then
                 mkdir -p /media/savvyUSB
             fi
             mount $DRIVEID /media/savvyUSB
-            
+
             #update the main script before any other files
             if [ -f /media/savvyUSB/savvy.sh ]; then
                 updatefile savvy.sh 755 /media/savvyUSB/ /home/savvy/
             fi
-        
+
             if [ "$FILESDIFFERENT" ]; then
                 #skip until next cycle
                 echo "savvy.sh updated"
                 touch /home/savvy/rebootflag
-            else    
+            else
                 updatefile .bashrc 644 /media/savvyUSB/ /home/savvy/
                 updatefile .xsession 644 /media/savvyUSB/ /home/savvy/
                 updatefile emlogo.png 644 /media/savvyUSB/ /home/savvy/
@@ -243,7 +241,7 @@ if [[ $1 == 'update' ]]; then
                 if [[ -d $USERJSPATH ]]; then
                     updatefile user.js 644 /media/savvyUSB/ $USERJSPATH/
                 fi
-        
+
                 if [[ "$FILESDIFFERENT" || -f /home/savvy/rebootflag ]]; then
                     echo "files were updated - rebooting in 3s"
                     rm /home/savvy/rebootflag
@@ -256,7 +254,7 @@ if [[ $1 == 'update' ]]; then
     fi
     #USB UPDATE END
 
-    
+
     #GIT UPDATE
     if [[ $2 == 'git' ]]; then
         #update main files via git
@@ -277,12 +275,12 @@ if [[ $1 == 'update' ]]; then
         updatefile emlogo.png 644 /home/savvy/updatetest1/ /home/savvy/
         updatefile offline.png 644 /home/savvy/updatetest1/ /home/savvy/
         updatefile offlinenet.png 644 /home/savvy/updatetest1/ /home/savvy/
-    
+
         USERJSPATH=$(find /home/savvy/.mozilla/firefox* -type d -name *default-esr* 2>/dev/null)
         if [[ -d $USERJSPATH ]]; then
             updatefile user.js 644 /home/savvy/updatetest1/ $USERJSPATH/
         fi
-    
+
         if [[ "$FILESDIFFERENT" ]]; then
             #update log file
             echo "Git update at $(date)" >> /home/savvy/backup/update_record
@@ -290,39 +288,37 @@ if [[ $1 == 'update' ]]; then
     fi
     #END OF GIT UPDATE
 
-    
+
     #CUSTOMER INFO UPDATE 
     if [[ $2 == 'customer' ]]; then
         if [[ -s /home/savvy/.url ]]; then
-            #define customer path from .url file
+            #define customer path from .url file works for full url or just the slug
             CUSTWEB=$(cat /home/savvy/.url | awk '{ print $NF }' FS='\/')
 
             #download customer data
             cd /home/savvy/
-            wget -N https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
+            wget -N --wait=180 --random-wait https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
             #if last command exited with code 0 (no errors), decode json file, write to customer_info
             if [[ $? == 0 ]]; then
-                base64 -d /home/savvy/$CUSTWEB.json > /home/savvy/customer_info
-                #remove commas quotes and format json in columns
-                sed -i 's/{//;s/}//;s/"//g;s/,/\n/g' /home/savvy/customer_info
+                base64 -d /home/savvy/$CUSTWEB.json | jq > /home/savvy/customer_info
             fi
-            
+
             #remove customer_info file if it's empty
             if [[ ! -s /home/savvy/customer_info ]]; then
                 rm /home/savvy/customer_info
             #if not empty, update screen sleep schedule
             else
                 #define variables
-                SLEEPENABLED=$(grep sleepEnabled /home/savvy/customer_info 2>/dev/null | awk -F : '{print $2}')
-                SLEEPSTART=$(grep sleepStart /home/savvy/customer_info 2>/dev/null | awk -F : '{print $2}')
-                SLEEPEND=$(grep sleepEnd /home/savvy/customer_info 2>/dev/null | awk -F : '{print $2}')
+                SLEEPENABLED=$(jq .sleepEnabled /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
+                SLEEPSTART=$(jq .sleepStart /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
+                SLEEPEND=$(jq .sleepEnd /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
                 SLEEPENDMIN=$(echo $SLEEPEND | cut -c 3-4)
                 SLEEPENDHOUR=$(echo $SLEEPEND | cut -c 1-2)
 
                 if [[ $SLEEPEND && $SLEEPENABLED = 'true' ]]; then
                     #update reboot time
                     sed -i "/root reboot/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * root reboot" /etc/crontab
-                    sed -i "/savvy echo/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * savvy echo \"System reset at \$(date)\" > cron_last_reset" /etc/crontab
+                    sed -i "/savvy echo/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/crontab
                     #redefine variables for a git update 10 minutes before reset
                     if [[ $SLEEPENDMIN -lt 10 ]]; then
                         if [[ $SLEEPENDHOUR -gt 0 ]]; then
@@ -336,7 +332,7 @@ if [[ $1 == 'update' ]]; then
                     fi
                     sed -i "/update git/c$SLEEPENDMIN $SLEEPENDHOUR * * * root /home/savvy/savvy.sh update git" /etc/crontab
                 fi
-                
+
                 if [[ $SLEEPSTART ]]; then
                     #if sleep start hasn't been set up in crontab, set it up
                     if [[ ! $(sed -n '/sleep start/p' /etc/crontab) ]]; then
@@ -356,6 +352,7 @@ if [[ $1 == 'update' ]]; then
 
                     #if sleep is off, set reboot to the default of 1pm local 
                     sed -i "/root reboot/c0 13 * * * root reboot" /etc/crontab
+                    sed -i "/savvy echo/c0 13 * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/crontab
                     #update git 10 minutes before reboot
                     sed -i "/update git/c50 12 * * * root /home/savvy/savvy.sh update git" /etc/crontab
                 fi
@@ -363,7 +360,7 @@ if [[ $1 == 'update' ]]; then
         fi
         #update room number
         /home/savvy/savvy.sh room_number
-        
+
         #update serial number
         if [[ $(cat /sys/devices/platform/firmware\:secure-monitor/serial) != $(cat /home/savvy/device_info | grep Serial | awk -F : '{print $2}' | sed 's/^ *//') ]]; then
             sed -i "/Serial/cSerial number: $(cat /sys/devices/platform/firmware\:secure-monitor/serial)" /home/savvy/device_info
@@ -383,16 +380,14 @@ if [[ $1 == 'update' ]]; then
                 if [[ -s /home/savvy/.url ]]; then
                     #define customer path from .url file
                     CUSTWEB=$(cat /home/savvy/.url | awk '{ print $NF }' FS='\/')
-    
+
                     #download customer data
                     cd /home/savvy/
                     #overwrite any existing file of the same name
-                    wget -O ./$CUSTWEB.json https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
+                    wget -O --wait=180 --random-wait ./$CUSTWEB.json https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
                     #if last command exited with code 0 (no errors), decode json file, write to customer_info
                     if [[ $? == 0 ]]; then
-                        base64 -d /home/savvy/$CUSTWEB.json > /home/savvy/customer_info
-                        #remove commas, quotes and format json in columns
-                        sed -i 's/{//;s/}//;s/"//g;s/,/\n/g' /home/savvy/customer_info
+                        base64 -d /home/savvy/$CUSTWEB.json | jq > /home/savvy/customer_info
                     fi
 
                     #remove customer_info file if it's empty
@@ -400,7 +395,7 @@ if [[ $1 == 'update' ]]; then
                         rm /home/savvy/customer_info
                     #otherwise proceed to wificleanup and reboot
                     else
-                        #if there are more than 20(actually 16) stored networks, delete them and start over
+                        #if there are more than 25 stored networks listed, delete all wifi profiles and start over
                         if [[ `echo $(nmcli -f NAME con show) | awk '{print NF}'` -gt 25 ]]; then
                             #clean up wifi if total fields exceed 25
                             wificleanup
@@ -420,8 +415,8 @@ if [[ $1 == 'update' ]]; then
         #if customer_info is a non-empty file
         if [[ -s /home/savvy/customer_info ]]; then
             #if current timezone not the same as what is on timezone line of customer_info
-            if [[ $(timedatectl | grep Time | awk '{print $3}') != $(grep timezone /home/savvy/customer_info | awk -F : '{print $2}') ]]; then
-            timedatectl set-timezone $(grep timezone /home/savvy/customer_info | awk -F : '{print $2}' )
+            if [[ $(timedatectl | grep Time | awk '{print $3}') != $(jq .timezone /home/savvy/customer_info | sed 's/^\"//; s/\"$//') ]]; then
+            timedatectl set-timezone $(jq .timezone /home/savvy/customer_info | sed 's/^\"//; s/\"//' )
             timedatectl set-ntp true
             fi
         fi
@@ -436,31 +431,23 @@ if [[ $1 == 'room_number' ]]; then
     ROOMPATH=$(find /home/savvy/.mozilla/ -type d -name *awsapprunner.com 2>/dev/null)
     if [[ "$ROOMPATH" ]]; then
         cd $ROOMPATH/ls
-    
+
         if [[ -s data.sqlite ]]; then
             #create a temporary file containing the sqlite plain text
-            cat data.sqlite | sed "s/[^[:alnum:] \" &]//g" | sed -n '/Number/p' | sed 's/""/"/g' > tempfile
+            cat data.sqlite | sed "s/[^[:print:]]//g" | sed -n '/Number/p' > tempfile
             #remove non-ASCII characters
             iconv -t ASCII -c -o tempfile tempfile
-            #get number of fields using " as a separator
-            MAXFIELDS=$(cat tempfile | awk -F "\"" '{print NF}')
 
+            #if tempfile is not empty, extract room number and write to device_info
             if [[ -s tempfile ]]; then
-                #iterate through all fields separated by double quotes
-                i=1
-                until [ $i -gt $MAXFIELDS ]; do
-                    #get current field string
-                    FIELD=`awk -v i=$i '{print $i}' FS='\"' tempfile`
-                    ((i++))
-            
-                    #match the string one field before room number
-                    if [[ "$FIELD" == "Number" ]]; then
-                        #write room number to file
-                            ROOMNUMBER=$(awk -v i=$i '{print $i}' FS='\"' tempfile)
-                            sed -i "/Room/cRoom number: $ROOMNUMBER" /home/savvy/device_info
-                        break
-                    fi
-                done
+                #extract room number from tempfile
+                ROOMNUMBER=$(cat tempfile | awk -F 'Number":"' '{print $2}' | awk -F '","show' '{print $1}'
+
+                #write room number to device_info
+                sed -i "/Room/cRoom number: $ROOMNUMBER" /home/savvy/device_info
+                #note: when extracting room number from device_info, use a command like the following
+                #  ROOMNUMBER=$(cat device_info | grep Room | sed 's/Room number: //')
+                #to ignore any colons followed by spaces that could appear in a room name
             fi
         fi
     fi

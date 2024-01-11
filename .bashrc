@@ -47,12 +47,12 @@ esac
 
 if [ -n "$force_color_prompt" ]; then
     if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
-	# We have color support; assume it's compliant with Ecma-48
-	# (ISO/IEC-6429). (Lack of such support is extremely rare, and such
-	# a case would tend to support setf rather than setaf.)
-	color_prompt=yes
+    # We have color support; assume it's compliant with Ecma-48
+    # (ISO/IEC-6429). (Lack of such support is extremely rare, and such
+    # a case would tend to support setf rather than setaf.)
+    color_prompt=yes
     else
-	color_prompt=
+    color_prompt=
     fi
 fi
 
@@ -121,72 +121,72 @@ export LANGUAGE=en_US.UTF-8
 
 
 if [ "$(tty)" == "/dev/tty1" ]; then
-	#define startup functions in tty1
-	. /home/savvy/savvy.sh startup
+    #define startup functions and variables in tty1
+    . /home/savvy/savvy.sh startup
 
-	if [ -f /home/savvy/firstrun ]; then
-		FIRSTRUN=1
+    if [ -f /home/savvy/firstrun ]; then
+        FIRSTRUN=1
 
-		#needs customer url to proceed
-		if [ -s /home/savvy/.url ]; then
-           	nmcli con up "$SSID1"
+        #needs customer url to proceed
+        if [ -s /home/savvy/.url ]; then
+            nmcli con up "$SSID1"
 
-			#remove firstrun file after initial setup is complete
-			rm -f /home/savvy/firstrun
-		fi
-	fi #end of firstrun
+            #remove firstrun file after initial setup is complete
+            rm -f /home/savvy/firstrun
+        fi
+    fi #end of firstrun
 
-	#if FIRSTRUN is defined don't connect to SSID2 until next boot
-	if [ $FIRSTRUN ]; then
+    #if FIRSTRUN is defined don't connect to SSID2 until next boot
+    if [ $FIRSTRUN ]; then
         #remove firstrun file after initial setup is complete
-		rm -f /home/savvy/firstrun
-	#if SSID2 is defined
-	elif [[ "$SSID2" ]]; then
-		nmcli con up "$SSID2" >/dev/null 2>&1
-		#check nmcli response to see if it connected
-		if [[ $? != 0 ]]; then
-			#check that SSID2 is a profile in network manager
-			if [[ ! $(nmcli con show | grep "$SSID2") ]]; then
-				setupwifi "$SSID2" "$PASS2" connect
-			fi
-			#if already in network manager, dongle id might be wrong - network update script should reconfigure it
-		fi
-	fi
-	
-	NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
-	LOOPS=0
+        rm -f /home/savvy/firstrun
+    #if SSID2 is defined
+    elif [[ "$SSID2" ]]; then
+        nmcli con up "$SSID2" >/dev/null 2>&1
+        #check nmcli response to see if it connected
+        if [[ $? != 0 ]]; then
+            #check that SSID2 is a profile in network manager
+            if [[ ! $(nmcli con show | grep "$SSID2") ]]; then
+                setupwifi "$SSID2" "$PASS2" connect
+            fi
+            #if already in network manager, dongle id might be wrong - network update script should reconfigure it
+        fi
+    fi
+    
+    NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
+    LOOPS=0
 
-	until [[ "$NETWORK" != '' || $LOOPS > 4 ]]
-	do
-		#wait up to 10 seconds before continuing
-		sleep 2
-		LOOPS=$(( $LOOPS+1 ))
-		NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
-		if [[ $LOOPS > 4 ]]; then
-			#give it a little more time to connect
-			sleep 5
-		fi
-	done
+    until [[ "$NETWORK" != '' || $LOOPS > 4 ]]
+    do
+        #wait up to 10 seconds before continuing
+        sleep 2
+        LOOPS=$(( $LOOPS+1 ))
+        NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
+        if [[ $LOOPS > 4 ]]; then
+            #give it a little more time to connect
+            sleep 5
+        fi
+    done
 
-	#trim log files
-	logcleanup /home/savvy/.xsession-errors 1000
-	logcleanup /home/savvy/cron_last_reset 1000
-	logcleanup /home/savvy/backup/update_record 1000
+    #trim log files
+    logcleanup /home/savvy/.xsession-errors 1000
+    logcleanup /home/savvy/cron_last_reset 1000
+    logcleanup /home/savvy/backup/update_record 1000
 
-	#run function to prevent firefox hanging
-	nohangfirefox
-	
-	#remove offline flag if present
-	if [ -f /home/savvy/nobrowser ]; then
-		rm nobrowser
-	fi
-	
-	#set system volume
-	pactl set-sink-volume 0 80%
+    #run function to prevent firefox hanging
+    nohangfirefox
+    
+    #remove offline flag if present
+    if [ -f /home/savvy/nobrowser ]; then
+        rm nobrowser
+    fi
+    
+    #set system volume
+    pactl set-sink-volume 0 80%
 
     #set flag for one-time run actions at startup
     touch /home/savvy/runonce
 
-	#start xwindow and launch firefox
-	exec startx -- -nocursor >/dev/null 2>&1
+    #start xwindow and launch firefox
+    exec startx -- -nocursor >/dev/null 2>&1
 fi #end of tty1 scripts
