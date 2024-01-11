@@ -90,7 +90,7 @@ if [[ $1 == 'network_status' ]]; then
 
     NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
 
-    if [ "$NETWORK" = '' ]; then
+    if [[ "$NETWORK" = '' ]]; then
         #no network or wrong ifname
         echo "not connected to network"
         #define necessary variables and functions to configure wireless network in this script's scope
@@ -264,10 +264,11 @@ if [[ $1 == 'update' ]]; then
         git pull >> /home/savvy/backup/update_record
         truncate -s-1 /home/savvy/backup/update_record
         echo " $(date)" >> /home/savvy/backup/update_record
-    TAG=$(git tag | tail -n 1)
-    if [[ $(grep Release /home/savvy/device_info | awk '{print $2}' FS=': ') != $TAG ]]; then
-        sed -i "/Release/cRelease tag: $TAG" /home/savvy/device_info
-    fi
+        TAG=$(git tag | tail -n 1)
+
+        if [[ $(grep Release /home/savvy/device_info | awk '{print $2}' FS=': ') != $TAG ]]; then
+            sed -i "/Release/cRelease tag: $TAG" /home/savvy/device_info
+        fi
 
         updatefile savvy.sh 755 /home/savvy/updatetest1/ /home/savvy/
         updatefile .bashrc 644 /home/savvy/updatetest1/ /home/savvy/
@@ -441,7 +442,7 @@ if [[ $1 == 'room_number' ]]; then
             #if tempfile is not empty, extract room number and write to device_info
             if [[ -s tempfile ]]; then
                 #extract room number from tempfile
-                ROOMNUMBER=$(cat tempfile | awk -F 'Number":"' '{print $2}' | awk -F '","show' '{print $1}'
+                ROOMNUMBER=$(cat tempfile | awk -F 'Number":"' '{print $2}' | awk -F '","show' '{print $1}')
 
                 #write room number to device_info
                 sed -i "/Room/cRoom number: $ROOMNUMBER" /home/savvy/device_info
