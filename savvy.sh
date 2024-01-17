@@ -16,12 +16,6 @@
 
 cd /home/savvy/
 
-#run anything here once at startup
-if [[ -f /home/savvy/runonce ]]; then
-    rm /home/savvy/runonce
-    /home/savvy/savvy.sh update customer
-fi
-
 #STARTUP FUNCTIONS AND VARIABLES DEFINED
 if [[ $1 == 'startup' ]]; then
     #define SSID variables
@@ -120,7 +114,7 @@ if [[ $1 == 'network_status' ]]; then
         #check that all primary SSIDs are listed by network manager and set them up if not
         if [[ $(nmcli con show | grep "$SSID1") ]]; then
             #check that password is correct
-            if [[ $(nmcli con show "$SSID1" --show-secrets | grep wireless-security.psk: | awk -F : '{print $2}' | sed 's/^ *//') != "$PASS1" ]]; then
+            if [[ $(nmcli con show "$SSID1" --show-secrets | grep wireless-security.psk: | awk -F 'psk: *' '{print $2}') != "$PASS1" ]]; then
                 setupwifi "$SSID1" "$PASS1"
             fi
         else
@@ -128,7 +122,7 @@ if [[ $1 == 'network_status' ]]; then
         fi
 
         if [[ $(nmcli con show | grep "$SSID3") ]]; then
-            if [[ $(nmcli con show "$SSID3" --show-secrets | grep wireless-security.psk: | awk -F : '{print $2}' | sed 's/^ *//') != "$PASS3" ]]; then
+            if [[ $(nmcli con show "$SSID3" --show-secrets | grep wireless-security.psk: | awk -F 'psk: *' '{print $2}') != "$PASS3" ]]; then
                 setupwifi "$SSID3" "$PASS3"
             fi
         else
@@ -137,7 +131,7 @@ if [[ $1 == 'network_status' ]]; then
 
         if [[ "$SSID2" ]]; then
             if [[ $(nmcli con show | grep "$SSID2") ]]; then
-                if [[ $(nmcli con show "$SSID2" --show-secrets | grep wireless-security.psk: | awk -F : '{print $2}' | sed 's/^ *//') != "$PASS2" ]]; then
+                if [[ $(nmcli con show "$SSID2" --show-secrets | grep wireless-security.psk: | awk -F 'psk: *' '{print $2}') != "$PASS2" ]]; then
                     setupwifi "$SSID2" "$PASS2"
                 fi
             else
@@ -261,7 +255,11 @@ if [[ $1 == 'update' ]]; then
         #the /updatetest1 path needs to be updated if production repo is named something else
         cd /home/savvy/updatetest1
         mkdir -p /home/savvy/backup/
+
+        #wait a random time less than 7 minutes to check git
+        sleep $((RANDOM%420))
         git pull >> /home/savvy/backup/update_record
+        #remove carriage return on last update_record line and append date and time
         truncate -s-1 /home/savvy/backup/update_record
         echo " $(date)" >> /home/savvy/backup/update_record
         TAG=$(git tag | tail -n 1)
@@ -293,12 +291,15 @@ if [[ $1 == 'update' ]]; then
     #CUSTOMER INFO UPDATE 
     if [[ $2 == 'customer' ]]; then
         if [[ -s /home/savvy/.url ]]; then
-            #define customer path from .url file works for full url or just the slug
+            #define customer path from .url file (works for full url or just the slug)
             CUSTWEB=$(cat /home/savvy/.url | awk '{ print $NF }' FS='\/')
 
             #download customer data
             cd /home/savvy/
-            wget -N --wait=180 --random-wait https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
+
+            #wait a random time less than 2 minutes before downloading json
+            sleep $(($RANDOM%120))
+            wget -N https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
             #if last command exited with code 0 (no errors), decode json file, write to customer_info
             if [[ $? == 0 ]]; then
                 base64 -d /home/savvy/$CUSTWEB.json | jq > /home/savvy/customer_info
@@ -309,15 +310,50 @@ if [[ $1 == 'update' ]]; then
                 rm /home/savvy/customer_info
             #if not empty, update screen sleep schedule
             else
-                #define variables
+                #define local variables for sleep schedule
                 SLEEPENABLED=$(jq .sleepEnabled /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
-                SLEEPSTART=$(jq .sleepStart /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
-                SLEEPEND=$(jq .sleepEnd /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
-                SLEEPENDMIN=$(echo $SLEEPEND | cut -c 3-4)
-                SLEEPENDHOUR=$(echo $SLEEPEND | cut -c 1-2)
+                if [[ $SLEEPENABLED = 'true' ]]; then
 
-                if [[ $SLEEPEND && $SLEEPENABLED = 'true' ]]; then
-                    #update reboot time
+                    SLEEPSTART=$(jq .sleepStart /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
+                    SLEEPSTARTMIN=$(echo $SLEEPSTART | cut -c 3-4)
+                    #check that extracted digits are an integer 
+                    if [[ $SLEEPSTARTMIN =~ ^[0-9]+$ ]]; then
+                        #check that integer is less than 60
+                        if [[ $SLEEPSTARTMIN -gt 59 ]]; then
+                            SLEEPSTARTMIN=0
+                        fi
+                    else
+                        SLEEPSTARTMIN=0
+                    fi
+                    SLEEPSTARTHOUR=$(echo $SLEEPSTART | cut -c 1-2)
+                    if [[ $SLEEPSTARTHOUR =~ ^[0-9]+$ ]]; then
+                        #check that integer is less than 24
+                        if [[ $SLEEPSTARTHOUR -gt 23 ]]; then
+                            SLEEPSTARTHOUR=0
+                        fi
+                    else
+                        SLEEPSTARTHOUR=0
+                    fi
+    
+                    SLEEPEND=$(jq .sleepEnd /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
+                    SLEEPENDMIN=$(echo $SLEEPEND | cut -c 3-4)
+                    if [[ $SLEEPENDMIN =~ ^[0-9]+$ ]]; then
+                        if [[ $SLEEPENDMIN -gt 59 ]]; then
+                            SLEEPENDMIN=0
+                        fi
+                    else
+                        SLEEPENDMIN=0
+                    fi
+                    SLEEPENDHOUR=$(echo $SLEEPEND | cut -c 1-2)
+                    if [[ $SLEEPENDHOUR =~ ^[0-9]+$ ]]; then
+                        if [[ $SLEEPENDHOUR -gt 23 ]]; then
+                            SLEEPENDHOUR=0
+                        fi
+                    else
+                        SLEEPENDHOUR=0
+                    fi
+    
+                    #update reboot time in crontab
                     sed -i "/root reboot/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * root reboot" /etc/crontab
                     sed -i "/savvy echo/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/crontab
                     #redefine variables for a git update 10 minutes before reset
@@ -332,24 +368,20 @@ if [[ $1 == 'update' ]]; then
                         SLEEPENDMIN=$(($SLEEPENDMIN-10))
                     fi
                     sed -i "/update git/c$SLEEPENDMIN $SLEEPENDHOUR * * * root /home/savvy/savvy.sh update git" /etc/crontab
-                fi
-
-                if [[ $SLEEPSTART ]]; then
+    
                     #if sleep start hasn't been set up in crontab, set it up
                     if [[ ! $(sed -n '/sleep start/p' /etc/crontab) ]]; then
-                        sed -i "/provision/a`echo $SLEEPSTART | cut -c 3-4` `echo $SLEEPSTART | cut -c 1-2` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
+                        sed -i "/provision/a`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
                     #if sleep start already exists in crontab, update it
                     else
-                        sed -i "/sleep start/c`echo $SLEEPSTART | cut -c 3-4` `echo $SLEEPSTART | cut -c 1-2` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
+                        sed -i "/sleep start/c`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
                     fi
-                fi
-
-                if [[ $SLEEPENABLED = 'true' ]]; then
-                    #sleep schedule enabled-uncomment line in crontab
-                    sed -i '/sleep/s/#//g' /etc/crontab
+                
                 else
-                    #sleep disabled-comment it out in crontab
-                    sed -i '/sleep/s/^/#/' /etc/crontab
+                    #sleep disabled-comment it out in crontab unless it already is
+                    if [[ $(sed -n '/sleep start/p' /etc/crontab | cut -c 1) != \# ]]; then
+                        sed -i '/sleep/s/^/#/' /etc/crontab
+                    fi
 
                     #if sleep is off, set reboot to the default of 1pm local 
                     sed -i "/root reboot/c0 13 * * * root reboot" /etc/crontab
@@ -374,7 +406,7 @@ if [[ $1 == 'update' ]]; then
     if [[ $2 == 'provision' ]]; then
         . /home/savvy/savvy.sh startup
         CURWIFI=$(nmcli con show | sed '2q;d' | awk -F "  " '{print $1}')
-        #don't update json if SSID2 is already connected (it will be done automatically at midnight)
+        #don't update json if SSID2 is already connected (it will be done automatically at next reboot)
         if [[ "$CURWIFI" != "$SSID2" ]]; then
             #if current network is EMSETUP
             if [[ "$CURWIFI" = "$SSID3" ]]; then
@@ -385,7 +417,7 @@ if [[ $1 == 'update' ]]; then
                     #download customer data
                     cd /home/savvy/
                     #overwrite any existing file of the same name
-                    wget -O --wait=180 --random-wait ./$CUSTWEB.json https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
+                    wget -O ./$CUSTWEB.json https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
                     #if last command exited with code 0 (no errors), decode json file, write to customer_info
                     if [[ $? == 0 ]]; then
                         base64 -d /home/savvy/$CUSTWEB.json | jq > /home/savvy/customer_info
@@ -396,7 +428,7 @@ if [[ $1 == 'update' ]]; then
                         rm /home/savvy/customer_info
                     #otherwise proceed to wificleanup and reboot
                     else
-                        #if there are more than 25 stored networks listed, delete all wifi profiles and start over
+                        #if there are more than 25 items in list (wifi SSIDs with spaces will be counted as multiple items), delete all wifi profiles and start over
                         if [[ `echo $(nmcli -f NAME con show) | awk '{print NF}'` -gt 25 ]]; then
                             #clean up wifi if total fields exceed 25
                             wificleanup
@@ -417,8 +449,8 @@ if [[ $1 == 'update' ]]; then
         if [[ -s /home/savvy/customer_info ]]; then
             #if current timezone not the same as what is on timezone line of customer_info
             if [[ $(timedatectl | grep Time | awk '{print $3}') != $(jq .timezone /home/savvy/customer_info | sed 's/^\"//; s/\"$//') ]]; then
-            timedatectl set-timezone $(jq .timezone /home/savvy/customer_info | sed 's/^\"//; s/\"//' )
-            timedatectl set-ntp true
+                timedatectl set-timezone $(jq .timezone /home/savvy/customer_info | sed 's/^\"//; s/\"//' )
+                timedatectl set-ntp true
             fi
         fi
     fi
@@ -456,7 +488,7 @@ fi
 #END OF ROOM NUMBER
 
 #START OF SLEEP
-#$2='start' to turn screen off, 'end' to turn screen on
+#$2='start' to turn screen off, 'end' or anything else to turn screen on
 if [[ $1 = 'sleep' ]]; then
     export DISPLAY=:0.0
     if [[ $2 = 'start' ]]; then

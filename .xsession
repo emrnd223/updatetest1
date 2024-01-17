@@ -28,7 +28,7 @@ if [[ "$NETWORK" != '' ]]; then
 fi
 
 #no internet connection-go to offline option
-if [ "$INTERNET" = '' ]; then
+if [[ "$INTERNET" = '' ]]; then
     #sleep so em splash screen stays visible for a few seconds before switching to offline message
     sleep 5s
     touch nobrowser

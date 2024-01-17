@@ -124,24 +124,8 @@ if [ "$(tty)" == "/dev/tty1" ]; then
     #define startup functions and variables in tty1
     . /home/savvy/savvy.sh startup
 
-    if [ -f /home/savvy/firstrun ]; then
-        FIRSTRUN=1
-
-        #needs customer url to proceed
-        if [ -s /home/savvy/.url ]; then
-            nmcli con up "$SSID1"
-
-            #remove firstrun file after initial setup is complete
-            rm -f /home/savvy/firstrun
-        fi
-    fi #end of firstrun
-
-    #if FIRSTRUN is defined don't connect to SSID2 until next boot
-    if [ $FIRSTRUN ]; then
-        #remove firstrun file after initial setup is complete
-        rm -f /home/savvy/firstrun
     #if SSID2 is defined
-    elif [[ "$SSID2" ]]; then
+    if [[ "$SSID2" ]]; then
         nmcli con up "$SSID2" >/dev/null 2>&1
         #check nmcli response to see if it connected
         if [[ $? != 0 ]]; then
