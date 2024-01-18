@@ -168,9 +168,6 @@ if [ "$(tty)" == "/dev/tty1" ]; then
     #set system volume
     pactl set-sink-volume 0 80%
 
-    #set flag for one-time run actions at startup
-    touch /home/savvy/runonce
-
     #start xwindow and launch firefox
     exec startx -- -nocursor >/dev/null 2>&1
 fi #end of tty1 scripts

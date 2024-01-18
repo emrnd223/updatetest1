@@ -219,7 +219,7 @@ fi
 
 #UPDATE SCRIPT START
 if [[ $1 == 'update' ]]; then
-    #updatefile $1=filename $2=permissions $3=path to replacement file $4=path to file to be replaced
+    #updatefile $1=filename $2=permissions $3=path to replacement file $4=path to file to be replaced $5=owner
     updatefile () {
 
     if [ -f $3$1 ]; then
@@ -238,7 +238,7 @@ if [[ $1 == 'update' ]]; then
             fi
             echo "copying $1 from $3"
             cp $3$1 $4$1
-            chown savvy:savvy $4$1
+            chown $5:$5 $4$1
             chmod $2 $4$1
         fi
     fi
@@ -261,7 +261,7 @@ if [[ $1 == 'update' ]]; then
 
             #update the main script before any other files
             if [ -f /media/savvyUSB/savvy.sh ]; then
-                updatefile savvy.sh 755 /media/savvyUSB/ /home/savvy/
+                updatefile savvy.sh 755 /media/savvyUSB/ /home/savvy/ savvy
             fi
 
             if [ "$FILESDIFFERENT" ]; then
@@ -270,18 +270,18 @@ if [[ $1 == 'update' ]]; then
                 touch /home/savvy/rebootflag
 #                touch /home/savvy/updates
             else
-                updatefile .bashrc 644 /media/savvyUSB/ /home/savvy/
-                updatefile .xsession 644 /media/savvyUSB/ /home/savvy/
-                updatefile emlogo.png 644 /media/savvyUSB/ /home/savvy/
-                updatefile offline.png 644 /media/savvyUSB/ /home/savvy/
-                updatefile offlinenet.png 644 /media/savvyUSB/ /home/savvy/
-                updatefile cronscripts 644 /media/savvyUSB/ /etc/cron.d/
-                updatefile .url 644 /media/savvyUSB/ /home/savvy/
+                updatefile .bashrc 644 /media/savvyUSB/ /home/savvy/ savvy
+                updatefile .xsession 644 /media/savvyUSB/ /home/savvy/ savvy
+                updatefile emlogo.png 644 /media/savvyUSB/ /home/savvy/ savvy
+                updatefile offline.png 644 /media/savvyUSB/ /home/savvy/ savvy
+                updatefile offlinenet.png 644 /media/savvyUSB/ /home/savvy/ savvy
+                updatefile crontab 644 /media/savvyUSB/ /etc/ root
+                updatefile .url 644 /media/savvyUSB/ /home/savvy/ savvy
 
                 USERJSPATH=$(find /home/savvy/.mozilla/firefox* -type d -name *default-esr*)
                 echo "userjspath=$USERJSPATH"
                 if [[ -d $USERJSPATH ]]; then
-                    updatefile user.js 644 /media/savvyUSB/ $USERJSPATH/
+                    updatefile user.js 644 /media/savvyUSB/ $USERJSPATH/ savvy
                 fi
 
                 if [[ "$FILESDIFFERENT" || -f /home/savvy/rebootflag ]]; then
@@ -301,8 +301,8 @@ if [[ $1 == 'update' ]]; then
     #GIT UPDATE
     if [[ $2 == 'git' ]]; then
         #update main files via git
-        #the /ea02c68f0b34aa4 path needs to be updated if production repo is named something else
-        cd /home/savvy/ea02c68f0b34aa4
+        #the /updatetest1 path needs to be updated if production repo is named something else
+        cd /home/savvy/updatetest1
         mkdir -p /home/savvy/backup/
 
         #wait a random time less than 7 minutes to check git
@@ -320,17 +320,17 @@ if [[ $1 == 'update' ]]; then
             sed -i "/Release/cRelease tag: $TAG" /home/savvy/device_info
         fi
 
-        updatefile savvy.sh 755 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
-        updatefile .bashrc 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
-        updatefile .xsession 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
-        updatefile emlogo.png 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
-        updatefile offline.png 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
-        updatefile offlinenet.png 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
-        updatefile cronscripts 644 /home/savvy/ea02c68f0b34aa4/ /etc/cron.d/
+        updatefile savvy.sh 755 /home/savvy/updatetest1/ /home/savvy/ savvy
+        updatefile .bashrc 644 /home/savvy/updatetest1/ /home/savvy/ savvy
+        updatefile .xsession 644 /home/savvy/updatetest1/ /home/savvy/ savvy
+        updatefile emlogo.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
+        updatefile offline.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
+        updatefile offlinenet.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
+        updatefile crontab 644 /home/savvy/updatetest1/ /etc/ root
 
         USERJSPATH=$(find /home/savvy/.mozilla/firefox* -type d -name *default-esr* 2>/dev/null)
         if [[ -d $USERJSPATH ]]; then
-            updatefile user.js 644 /home/savvy/ea02c68f0b34aa4/ $USERJSPATH/
+            updatefile user.js 644 /home/savvy/updatetest1/ $USERJSPATH/ savvy
         fi
 
         if [[ "$FILESDIFFERENT" ]]; then
@@ -410,9 +410,9 @@ if [[ $1 == 'update' ]]; then
                         SLEEPENDHOUR=0
                     fi
 
-                    #update reboot time in cronscripts
-                    sed -i "/root reboot/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * root reboot" /etc/cron.d/cronscripts
-                    sed -i "/savvy echo/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/cron.d/cronscripts
+                    #update reboot time in crontab
+                    sed -i "/root reboot/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * root reboot" /etc/crontab
+                    sed -i "/savvy echo/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/crontab
                     #redefine variables for a git update 10 minutes before reset
                     if [[ $SLEEPENDMIN -lt 10 ]]; then
                         if [[ $SLEEPENDHOUR -gt 0 ]]; then
@@ -424,32 +424,35 @@ if [[ $1 == 'update' ]]; then
                     else
                         SLEEPENDMIN=$(($SLEEPENDMIN-10))
                     fi
-                    sed -i "/update git/c$SLEEPENDMIN $SLEEPENDHOUR * * * root /home/savvy/savvy.sh update git" /etc/cron.d/cronscripts
+                    sed -i "/update git/c$SLEEPENDMIN $SLEEPENDHOUR * * * root /home/savvy/savvy.sh update git" /etc/crontab
 
-                    #if sleep start hasn't been set up in cronscripts, set it up
-                    if [[ ! $(sed -n '/sleep start/p' /etc/cron.d/cronscripts) ]]; then
-                        sed -i "/provision/a`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/cron.d/cronscripts
-                    #if sleep start already exists in cronscripts, update it
+                    #if sleep start hasn't been set up in crontab, set it up
+                    if [[ ! $(sed -n '/sleep start/p' /etc/crontab) ]]; then
+                        sed -i "/provision/a`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
+                    #if sleep start already exists in crontab, update it
                     else
-                        sed -i "/sleep start/c`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/cron.d/cronscripts
+                        sed -i "/sleep start/c`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
                     fi
 
                 else
-                    #sleep disabled-comment it out in cronscripts unless it already is
-                    if [[ $(sed -n '/sleep start/p' /etc/cron.d/cronscripts | cut -c 1) != \# ]]; then
-                        sed -i '/sleep/s/^/#/' /etc/cron.d/cronscripts
+                    #sleep disabled-comment it out in crontab unless it already is
+                    if [[ $(sed -n '/sleep start/p' /etc/crontab | cut -c 1) != \# ]]; then
+                        sed -i '/sleep/s/^/#/' /etc/crontab
                     fi
 
                     #if sleep is off, set reboot to the default of 1pm local 
-                    sed -i "/root reboot/c0 13 * * * root reboot" /etc/cron.d/cronscripts
-                    sed -i "/savvy echo/c0 13 * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/cron.d/cronscripts
+                    sed -i "/root reboot/c0 13 * * * root reboot" /etc/crontab
+                    sed -i "/savvy echo/c0 13 * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/crontab
                     #update git 10 minutes before reboot
-                    sed -i "/update git/c50 12 * * * root /home/savvy/savvy.sh update git" /etc/cron.d/cronscripts
+                    sed -i "/update git/c50 12 * * * root /home/savvy/savvy.sh update git" /etc/crontab
                 fi
             fi
         fi
         #update room number
         /home/savvy/savvy.sh update room_number
+
+        #update time zone
+        /home/savvy/savvy.sh update timezone
 
         #update serial number
         if [[ $(cat /sys/devices/platform/firmware\:secure-monitor/serial) != $(cat /home/savvy/device_info | grep Serial | awk -F : '{print $2}' | sed 's/^ *//') ]]; then
