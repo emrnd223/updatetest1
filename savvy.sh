@@ -3,13 +3,15 @@
 #command line arguments:
 #startup
 #network_status
+#provision
 #update 
 #   -usb
 #   -git
+#       -nodelay
 #   -customer
-#   -provision
+#       -nodelay
+#   -room_number
 #   -timezone
-#room_number
 #sleep
 #   -start
 #   -end
@@ -171,6 +173,50 @@ fi
 #NETWORK CHECK END
 
 
+#PROVISIONING START
+if [[ $1 == 'provision' ]]; then
+    . /home/savvy/savvy.sh startup
+    CURWIFI=$(nmcli con show | sed '2q;d' | awk -F "  " '{print $1}')
+    #don't update json if SSID2 is already connected (it will be done automatically at next reboot)
+    if [[ "$CURWIFI" != "$SSID2" ]]; then
+        #if current network is EMSETUP
+        if [[ "$CURWIFI" = "$SSID3" ]]; then
+            if [[ -s /home/savvy/.url ]]; then
+                #define customer path from .url file
+                CUSTWEB=$(cat /home/savvy/.url | awk '{ print $NF }' FS='\/')
+
+                #download customer data
+                cd /home/savvy/
+                #overwrite any existing file of the same name
+                wget -O ./$CUSTWEB.json https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
+                #if last command exited with code 0 (no errors), decode json file, write to customer_info
+                if [[ $? == 0 ]]; then
+                    base64 -d /home/savvy/$CUSTWEB.json | jq > /home/savvy/customer_info
+                fi
+
+                #remove customer_info file if it's empty
+                if [[ ! -s /home/savvy/customer_info ]]; then
+                    rm /home/savvy/customer_info
+                #otherwise proceed to wificleanup and reboot
+                else
+                    #if there are more than 25 items in list (wifi SSIDs with spaces will be counted as multiple items), delete all wifi profiles and start over
+                    if [[ `echo $(nmcli -f NAME con show) | awk '{print NF}'` -gt 25 ]]; then
+                        #clean up wifi if total fields exceed 25
+                        wificleanup
+                    fi
+                    #update git while on provisioning network
+                    /home/savvy/savvy.sh update git nodelay
+
+                    #reboot to show that customer_info was updated 
+                    reboot
+                fi
+            fi
+        fi
+    fi
+fi
+#PROVISIONING END
+
+
 #UPDATE SCRIPT START
 if [[ $1 == 'update' ]]; then
     #updatefile $1=filename $2=permissions $3=path to replacement file $4=path to file to be replaced
@@ -222,12 +268,14 @@ if [[ $1 == 'update' ]]; then
                 #skip until next cycle
                 echo "savvy.sh updated"
                 touch /home/savvy/rebootflag
+#                touch /home/savvy/updates
             else
                 updatefile .bashrc 644 /media/savvyUSB/ /home/savvy/
                 updatefile .xsession 644 /media/savvyUSB/ /home/savvy/
                 updatefile emlogo.png 644 /media/savvyUSB/ /home/savvy/
                 updatefile offline.png 644 /media/savvyUSB/ /home/savvy/
                 updatefile offlinenet.png 644 /media/savvyUSB/ /home/savvy/
+                updatefile cronscripts 644 /media/savvyUSB/ /etc/cron.d/
                 updatefile .url 644 /media/savvyUSB/ /home/savvy/
 
                 USERJSPATH=$(find /home/savvy/.mozilla/firefox* -type d -name *default-esr*)
@@ -239,6 +287,7 @@ if [[ $1 == 'update' ]]; then
                 if [[ "$FILESDIFFERENT" || -f /home/savvy/rebootflag ]]; then
                     echo "files were updated - rebooting in 3s"
                     rm /home/savvy/rebootflag
+#                    touch /home/savvy/updates
                     umount $DRIVEID
                     sleep 3
                     reboot
@@ -252,12 +301,15 @@ if [[ $1 == 'update' ]]; then
     #GIT UPDATE
     if [[ $2 == 'git' ]]; then
         #update main files via git
-        #the /updatetest1 path needs to be updated if production repo is named something else
-        cd /home/savvy/updatetest1
+        #the /ea02c68f0b34aa4 path needs to be updated if production repo is named something else
+        cd /home/savvy/ea02c68f0b34aa4
         mkdir -p /home/savvy/backup/
 
         #wait a random time less than 7 minutes to check git
-        sleep $((RANDOM%420))
+        if [[ $3 != 'nodelay' ]]; then
+            sleep $((RANDOM%420))
+        fi
+
         git pull >> /home/savvy/backup/update_record
         #remove carriage return on last update_record line and append date and time
         truncate -s-1 /home/savvy/backup/update_record
@@ -268,21 +320,24 @@ if [[ $1 == 'update' ]]; then
             sed -i "/Release/cRelease tag: $TAG" /home/savvy/device_info
         fi
 
-        updatefile savvy.sh 755 /home/savvy/updatetest1/ /home/savvy/
-        updatefile .bashrc 644 /home/savvy/updatetest1/ /home/savvy/
-        updatefile .xsession 644 /home/savvy/updatetest1/ /home/savvy/
-        updatefile emlogo.png 644 /home/savvy/updatetest1/ /home/savvy/
-        updatefile offline.png 644 /home/savvy/updatetest1/ /home/savvy/
-        updatefile offlinenet.png 644 /home/savvy/updatetest1/ /home/savvy/
+        updatefile savvy.sh 755 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
+        updatefile .bashrc 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
+        updatefile .xsession 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
+        updatefile emlogo.png 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
+        updatefile offline.png 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
+        updatefile offlinenet.png 644 /home/savvy/ea02c68f0b34aa4/ /home/savvy/
+        updatefile cronscripts 644 /home/savvy/ea02c68f0b34aa4/ /etc/cron.d/
 
         USERJSPATH=$(find /home/savvy/.mozilla/firefox* -type d -name *default-esr* 2>/dev/null)
         if [[ -d $USERJSPATH ]]; then
-            updatefile user.js 644 /home/savvy/updatetest1/ $USERJSPATH/
+            updatefile user.js 644 /home/savvy/ea02c68f0b34aa4/ $USERJSPATH/
         fi
 
         if [[ "$FILESDIFFERENT" ]]; then
             #update log file
             echo "Git update at $(date)" >> /home/savvy/backup/update_record
+            #set flag that files have changed
+#            touch /home/savvy/updates
         fi
     fi
     #END OF GIT UPDATE
@@ -294,11 +349,13 @@ if [[ $1 == 'update' ]]; then
             #define customer path from .url file (works for full url or just the slug)
             CUSTWEB=$(cat /home/savvy/.url | awk '{ print $NF }' FS='\/')
 
+            #wait a random time less than 3 minutes before downloading json unless 'nodelay' is added
+            if [[ $3 != 'nodelay' ]]; then
+                sleep $(($RANDOM%180))
+            fi
+
             #download customer data
             cd /home/savvy/
-
-            #wait a random time less than 2 minutes before downloading json
-            sleep $(($RANDOM%120))
             wget -N https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
             #if last command exited with code 0 (no errors), decode json file, write to customer_info
             if [[ $? == 0 ]]; then
@@ -334,7 +391,7 @@ if [[ $1 == 'update' ]]; then
                     else
                         SLEEPSTARTHOUR=0
                     fi
-    
+
                     SLEEPEND=$(jq .sleepEnd /home/savvy/customer_info | sed 's/^\"//; s/\"$//')
                     SLEEPENDMIN=$(echo $SLEEPEND | cut -c 3-4)
                     if [[ $SLEEPENDMIN =~ ^[0-9]+$ ]]; then
@@ -352,10 +409,10 @@ if [[ $1 == 'update' ]]; then
                     else
                         SLEEPENDHOUR=0
                     fi
-    
-                    #update reboot time in crontab
-                    sed -i "/root reboot/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * root reboot" /etc/crontab
-                    sed -i "/savvy echo/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/crontab
+
+                    #update reboot time in cronscripts
+                    sed -i "/root reboot/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * root reboot" /etc/cron.d/cronscripts
+                    sed -i "/savvy echo/c`echo $SLEEPENDMIN` `echo $SLEEPENDHOUR` * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/cron.d/cronscripts
                     #redefine variables for a git update 10 minutes before reset
                     if [[ $SLEEPENDMIN -lt 10 ]]; then
                         if [[ $SLEEPENDHOUR -gt 0 ]]; then
@@ -367,32 +424,32 @@ if [[ $1 == 'update' ]]; then
                     else
                         SLEEPENDMIN=$(($SLEEPENDMIN-10))
                     fi
-                    sed -i "/update git/c$SLEEPENDMIN $SLEEPENDHOUR * * * root /home/savvy/savvy.sh update git" /etc/crontab
-    
-                    #if sleep start hasn't been set up in crontab, set it up
-                    if [[ ! $(sed -n '/sleep start/p' /etc/crontab) ]]; then
-                        sed -i "/provision/a`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
-                    #if sleep start already exists in crontab, update it
+                    sed -i "/update git/c$SLEEPENDMIN $SLEEPENDHOUR * * * root /home/savvy/savvy.sh update git" /etc/cron.d/cronscripts
+
+                    #if sleep start hasn't been set up in cronscripts, set it up
+                    if [[ ! $(sed -n '/sleep start/p' /etc/cron.d/cronscripts) ]]; then
+                        sed -i "/provision/a`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/cron.d/cronscripts
+                    #if sleep start already exists in cronscripts, update it
                     else
-                        sed -i "/sleep start/c`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab
+                        sed -i "/sleep start/c`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/cron.d/cronscripts
                     fi
-                
+
                 else
-                    #sleep disabled-comment it out in crontab unless it already is
-                    if [[ $(sed -n '/sleep start/p' /etc/crontab | cut -c 1) != \# ]]; then
-                        sed -i '/sleep/s/^/#/' /etc/crontab
+                    #sleep disabled-comment it out in cronscripts unless it already is
+                    if [[ $(sed -n '/sleep start/p' /etc/cron.d/cronscripts | cut -c 1) != \# ]]; then
+                        sed -i '/sleep/s/^/#/' /etc/cron.d/cronscripts
                     fi
 
                     #if sleep is off, set reboot to the default of 1pm local 
-                    sed -i "/root reboot/c0 13 * * * root reboot" /etc/crontab
-                    sed -i "/savvy echo/c0 13 * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/crontab
+                    sed -i "/root reboot/c0 13 * * * root reboot" /etc/cron.d/cronscripts
+                    sed -i "/savvy echo/c0 13 * * * savvy echo \"System reset at \$(date)\" >> cron_last_reset" /etc/cron.d/cronscripts
                     #update git 10 minutes before reboot
-                    sed -i "/update git/c50 12 * * * root /home/savvy/savvy.sh update git" /etc/crontab
+                    sed -i "/update git/c50 12 * * * root /home/savvy/savvy.sh update git" /etc/cron.d/cronscripts
                 fi
             fi
         fi
         #update room number
-        /home/savvy/savvy.sh room_number
+        /home/savvy/savvy.sh update room_number
 
         #update serial number
         if [[ $(cat /sys/devices/platform/firmware\:secure-monitor/serial) != $(cat /home/savvy/device_info | grep Serial | awk -F : '{print $2}' | sed 's/^ *//') ]]; then
@@ -402,45 +459,33 @@ if [[ $1 == 'update' ]]; then
     #CUSTOMER INFO END
 
 
-    #PROVISIONING START
-    if [[ $2 == 'provision' ]]; then
-        . /home/savvy/savvy.sh startup
-        CURWIFI=$(nmcli con show | sed '2q;d' | awk -F "  " '{print $1}')
-        #don't update json if SSID2 is already connected (it will be done automatically at next reboot)
-        if [[ "$CURWIFI" != "$SSID2" ]]; then
-            #if current network is EMSETUP
-            if [[ "$CURWIFI" = "$SSID3" ]]; then
-                if [[ -s /home/savvy/.url ]]; then
-                    #define customer path from .url file
-                    CUSTWEB=$(cat /home/savvy/.url | awk '{ print $NF }' FS='\/')
+    #START OF ROOM NUMBER
+    if [[ $2 == 'room_number' ]]; then
+        ROOMPATH=$(find /home/savvy/.mozilla/ -type d -name *awsapprunner.com 2>/dev/null)
+        if [[ "$ROOMPATH" ]]; then
+            cd $ROOMPATH/ls
 
-                    #download customer data
-                    cd /home/savvy/
-                    #overwrite any existing file of the same name
-                    wget -O ./$CUSTWEB.json https://savvy-configs.s3.us-west-2.amazonaws.com/$CUSTWEB.json
-                    #if last command exited with code 0 (no errors), decode json file, write to customer_info
-                    if [[ $? == 0 ]]; then
-                        base64 -d /home/savvy/$CUSTWEB.json | jq > /home/savvy/customer_info
-                    fi
+            if [[ -s data.sqlite ]]; then
+                #create a temporary file containing the sqlite plain text
+                cat data.sqlite | sed "s/[^[:print:]]//g" | sed -n '/Number/p' > tempfile
+                #remove non-ASCII characters
+                iconv -t ASCII -c -o tempfile tempfile
 
-                    #remove customer_info file if it's empty
-                    if [[ ! -s /home/savvy/customer_info ]]; then
-                        rm /home/savvy/customer_info
-                    #otherwise proceed to wificleanup and reboot
-                    else
-                        #if there are more than 25 items in list (wifi SSIDs with spaces will be counted as multiple items), delete all wifi profiles and start over
-                        if [[ `echo $(nmcli -f NAME con show) | awk '{print NF}'` -gt 25 ]]; then
-                            #clean up wifi if total fields exceed 25
-                            wificleanup
-                        fi
-                        #reboot to show that customer_info was updated 
-                        reboot
-                    fi
+                #if tempfile is not empty, extract room number and write to device_info
+                if [[ -s tempfile ]]; then
+                    #extract room number from tempfile
+                    ROOMNUMBER=$(cat tempfile | awk -F 'Number":"' '{print $2}' | awk -F '","show' '{print $1}')
+
+                    #write room number to device_info
+                    sed -i "/Room/cRoom number: $ROOMNUMBER" /home/savvy/device_info
+                    #note: when extracting room number from device_info, use a command like the following
+                    #  ROOMNUMBER=$(cat device_info | grep Room | sed 's/Room number: //')
+                    #to ignore any colons followed by spaces that could appear in a room name
                 fi
             fi
         fi
     fi
-    #PROVISIONING END
+    #END OF ROOM NUMBER
 
 
     #TIMEZONE
@@ -458,34 +503,6 @@ if [[ $1 == 'update' ]]; then
 fi
 #END OF UPDATE SCRIPT
 
-
-#START OF ROOM NUMBER
-if [[ $1 == 'room_number' ]]; then
-    ROOMPATH=$(find /home/savvy/.mozilla/ -type d -name *awsapprunner.com 2>/dev/null)
-    if [[ "$ROOMPATH" ]]; then
-        cd $ROOMPATH/ls
-
-        if [[ -s data.sqlite ]]; then
-            #create a temporary file containing the sqlite plain text
-            cat data.sqlite | sed "s/[^[:print:]]//g" | sed -n '/Number/p' > tempfile
-            #remove non-ASCII characters
-            iconv -t ASCII -c -o tempfile tempfile
-
-            #if tempfile is not empty, extract room number and write to device_info
-            if [[ -s tempfile ]]; then
-                #extract room number from tempfile
-                ROOMNUMBER=$(cat tempfile | awk -F 'Number":"' '{print $2}' | awk -F '","show' '{print $1}')
-
-                #write room number to device_info
-                sed -i "/Room/cRoom number: $ROOMNUMBER" /home/savvy/device_info
-                #note: when extracting room number from device_info, use a command like the following
-                #  ROOMNUMBER=$(cat device_info | grep Room | sed 's/Room number: //')
-                #to ignore any colons followed by spaces that could appear in a room name
-            fi
-        fi
-    fi
-fi
-#END OF ROOM NUMBER
 
 #START OF SLEEP
 #$2='start' to turn screen off, 'end' or anything else to turn screen on
