@@ -4,6 +4,8 @@
 #startup
 #network_status
 #provision
+#s3_upload
+#   -nodelay
 #update 
 #   -usb
 #   -git
@@ -218,6 +220,61 @@ if [[ $1 == 'provision' ]]; then
     fi
 fi
 #PROVISIONING END
+
+
+#S3 UPLOAD START
+if [[ $1 == 's3_upload' ]]; then
+    #wait a random time less than 7 minutes to upload daily data to s3 bucket
+    if [[ $2 != 'nodelay' ]]; then
+        sleep $((RANDOM%420))
+    fi
+
+    #create filename to upload
+    SLUG=$(cat /home/savvy/.url)
+    ROOM_NUMBER=$(cat /home/savvy/device_info | grep Room | awk -F 'number: ' '{print $2}')
+    SERIAL=$(cat /sys/devices/platform/firmware\:secure-monitor/serial)    #$(cat /home/savvy/device_info | grep Serial | awk -F 'number: ' '{print $2}')
+    DATE=$(date +%y%m%d)
+    FILENAME="$SLUG-$ROOM_NUMBER-$SERIAL-$DATE"
+
+    #add info to file
+    echo "slug: $SLUG" > /home/savvy/$FILENAME
+    echo "room: $ROOM_NUMBER" >> /home/savvy/$FILENAME
+    echo "serial: $SERIAL" >> /home/savvy/$FILENAME
+    echo "date: $(timedatectl | grep Local | awk -F 'time: ' '{print $2}')" >> /home/savvy/$FILENAME
+    echo "tag: $(cat /home/savvy/device_info | grep Release | awk -F 'tag: ' '{print $2}')" >> /home/savvy/$FILENAME
+    echo "os_ver: $(cat /home/savvy/device_info | grep OS | awk -F 'version: ' '{print $2}')" >> /home/savvy/$FILENAME
+    echo "timezone: $(timedatectl show | grep Timezone | awk -F = '{print $2}')" >> /home/savvy/$FILENAME
+    echo "sleep_enabled: $(jq .sleepEnabled /home/savvy/customer_info)" >> /home/savvy/$FILENAME
+    echo "sleep_start_json: $(jq .sleepStart /home/savvy/customer_info)" >> /home/savvy/$FILENAME
+    echo "sleep_start_cron: $(grep 'sleep start' /etc/crontab | cut -c 1-6)" >> /home/savvy/$FILENAME
+    echo "sleep_end_json: $(jq .sleepEnd /home/savvy/customer_info)" >> /home/savvy/$FILENAME
+    echo "sleep_end_cron: $(grep 'root reboot' /etc/crontab | cut -c 1-5)" >> /home/savvy/$FILENAME
+    echo "ssid: $(jq .ssid /home/savvy/customer_info)" >> /home/savvy/$FILENAME
+    echo "ssid_pass: $(jq .wifiPassword /home/savvy/customer_info)" >> /home/savvy/$FILENAME
+    echo "cpu_temp: $(cat /sys/class/thermal/thermal_zone0/temp | sed 's/000$/C/')" >> /home/savvy/$FILENAME
+    echo "cpu_us_sy_id: $(vmstat | sed '3q;d' | awk '{print $13,$14,$15}')" >> /home/savvy/$FILENAME
+    echo "ram_free: $(free -h | sed '2q;d' | awk '{print $4}')" >> /home/savvy/$FILENAME
+    echo "disk_free: $(df -h | grep mmcblk0p1 | awk '{print $4}')" >> /home/savvy/$FILENAME
+    echo "lsusb_1: $(lsusb | sed '1q;d')" >> /home/savvy/$FILENAME
+    echo "lsusb_2: $(lsusb | sed '2q;d')" >> /home/savvy/$FILENAME
+    echo "lsusb_3: $(lsusb | sed '3q;d')" >> /home/savvy/$FILENAME
+    echo "lsusb_4: $(lsusb | sed '4q;d')" >> /home/savvy/$FILENAME
+    echo "last_reboot: $(cat /home/savvy/cron_last_reset | tail -n 1)" >> /home/savvy/$FILENAME
+    echo "lan_rx_tx_tot_avg: $(vnstat -d 1 `vnstat --dbiflist | awk -F ' ' '{print $4}'` | sed '6q;d')" >> /home/savvy/$FILENAME
+    echo "wifi_rx_tx_tot_avg: $(vnstat -d 1 `vnstat --dbiflist | awk -F ' ' '{print $5}'` | sed '6q;d')" >> /home/savvy/$FILENAME
+    echo "network_health: $(ping 8.8.8.8 -c 1 | grep time=)" >> /home/savvy/$FILENAME
+    echo "active_network_interface: $(nmcli device | sed '2q;d')" >> /home/savvy/$FILENAME
+    echo "syslog_size: $(du -h /var/log/syslog)" >> /home/savvy/$FILENAME
+    echo "24h_crit_errors: $(journalctl --since "24 hours ago" | grep -i -E '(error|critical|alert)' | wc -l)" >> /home/savvy/$FILENAME
+
+    #upload file to s3
+    aws s3 cp /home/savvy/$FILENAME s3://savvysimple-devicedata
+#    #optionally remove file
+#    if [[ $? == 0 ]]; then
+#        rm /home/savvy/$FILENAME
+#    fi
+fi
+#S3 UPLOAD END
 
 
 #UPDATE SCRIPT START
@@ -457,7 +514,7 @@ if [[ $1 == 'update' ]]; then
                             SLEEPENDMIN=$(($SLEEPENDMIN-10))
                         fi
                         sed -i "/update git/c$SLEEPENDMIN $SLEEPENDHOUR * * * root /home/savvy/savvy.sh update git" /etc/crontab
-    
+
                         #if sleep start hasn't been set up in crontab, set it up
                         if [[ ! $(sed -n '/sleep start/p' /etc/crontab) ]]; then
                             sed -i "/provision/a`echo $SLEEPSTARTMIN` `echo $SLEEPSTARTHOUR` * * * savvy /home/savvy/savvy.sh sleep start" /etc/crontab

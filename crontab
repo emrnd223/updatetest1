@@ -22,6 +22,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 #
 @reboot root sleep 90 && /home/savvy/savvy.sh update customer
 50 12 * * * root /home/savvy/savvy.sh update git
+50 23 * * * root /home/savvy/savvy.sh s3_upload
 * * * * * root /home/savvy/savvy.sh network_status
 * * * * * root /home/savvy/savvy.sh update usb
 * * * * * root /home/savvy/savvy.sh provision
