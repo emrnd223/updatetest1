@@ -124,18 +124,18 @@ if [ "$(tty)" == "/dev/tty1" ]; then
     #define startup functions and variables in tty1
     . /home/savvy/savvy.sh startup
 
-    #if SSID2 is defined
-    if [[ "$SSID2" ]]; then
-        nmcli con up "$SSID2" >/dev/null 2>&1
-        #check nmcli response to see if it connected
-        if [[ $? != 0 ]]; then
-            #check that SSID2 is a profile in network manager
-            if [[ ! $(nmcli con show | grep "$SSID2") ]]; then
-                setupwifi "$SSID2" "$PASS2" connect
-            fi
-            #if already in network manager, dongle id might be wrong - network update script should reconfigure it
-        fi
-    fi
+#    #if SSID2 is defined
+#    if [[ "$SSID2" ]]; then
+#        nmcli con up "$SSID2" >/dev/null 2>&1
+#        #check nmcli response to see if it connected
+#        if [[ $? != 0 ]]; then
+#            #check that SSID2 is a profile in network manager
+#            if [[ ! $(nmcli con show | grep "$SSID2") ]]; then
+#                setupwifi "$SSID2" "$PASS2" 200 connect
+#            fi
+#            #if already in network manager, dongle id might be wrong - network update script should reconfigure it
+#        fi
+#    fi
     
     NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
     LOOPS=0
