@@ -11,7 +11,7 @@ xset s noblank
 
 nitrogen --set-centered emlogo.png
 
-#check for wifi/network status here; if result is '' there is no network
+#check for wifi/network status here; if result is '' network manager did not connect to a network
 NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
 #check for internet access (will equal some text if internet access is available)
 INTERNET=$(ping -c 2 8.8.8.8 | grep time=)
@@ -33,14 +33,25 @@ if [[ "$INTERNET" = '' ]]; then
     sleep 5s
     touch nobrowser
     if [ "$NETWORK" != '' ]; then
+        echo "Network connection established, but unable to access internet." > offline
+        echo "Connection details:" >> offline
+        echo $(iwconfig) >> offline 
+        echo "Unit will automatically reset when internet connection is restored (may take up to 5 minutes)." >> offline && pango-view --font="mono" -qo offline.png offline 
         #display message to say network is available, but no internet connection
-        nitrogen --set-centered offlinenet.png
-    else
-        #display message to say network is not available
         nitrogen --set-centered offline.png
+    else
+        #no network connection established
+        echo -e "No network connection established.\nVisible SSIDs with highest signal strength:" > nonet
+        nmcli device wifi | head -n 11 >> nonet 
+        echo "If no SSIDs are visible, check that the WiFi dongle is fully seated in USB port." >> nonet 
+        echo "Note: Unit will reset when network connection is established (may take up to 5 minutes)." && pango-view --font="mono" --pixels=800x480 -qo nonet.png nonet
+
+        #display message to say network is not available
+        nitrogen --set-centered nonet.png
     fi
 #internet connection established-go to website
 else
+    rm -f offline offline.png nonet nonet.png
     WIFICONNECTED=$(nmcli device | grep 'wifi ' | awk '{print $4}')
     #might need to change the following section depending on how it works with the EMSETUP network
     

@@ -121,7 +121,11 @@ if [[ $1 == 'network_status' ]]; then
                 nmcli con delete "$profile"
 
                 #add new wifi profile with new dongle ifname
-                setupwifi "$profile" "$PASSWORD" $PRIORITY
+                if [[ $PRIORITY -gt 199 ]]; then
+                    setupwifi "$profile" "$PASSWORD" $PRIORITY connect
+                else
+                    setupwifi "$profile" "$PASSWORD" $PRIORITY
+                fi
                 sleep 1
             fi
         done
@@ -158,7 +162,7 @@ if [[ $1 == 'network_status' ]]; then
             setupwifi "$SSID1" "$PASS1" 0
         fi
 
-        #check if startx didn't launch firefox due to no available network
+        #check if startx didn't launch firefox because no network was available 
         if [[ -f /home/savvy/nobrowser ]]; then
             if [[ "$SSID2" ]]; then
                 #check if SSID2 is broadcasting and visible
@@ -168,10 +172,10 @@ if [[ $1 == 'network_status' ]]; then
                     nmcli con up "$SSID2"
                     sleep 3
                 else
-                    echo "wifi SSID $SSID2 not visible"
+                    echo "wifi SSID \"$SSID2\" not visible"
                 fi
 
-            NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
+                NETWORK=`echo "$(nmcli device | grep 'wifi ' | awk '{print $3}') $(nmcli device | grep ethernet | awk '{print $3}')" | grep -w connected`
                 #if network is now available restart device
                 if [[ "$NETWORK" ]]; then
                     reboot
@@ -186,12 +190,14 @@ if [[ $1 == 'network_status' ]]; then
             reboot
         fi
 #    else
-#        #network connected-check for best priority SSID
+#        #network connected-check for highest priority SSID
 #        ACTIVEWIFI=$(nmcli con | sed '2q;d' | grep ' wifi ' | awk -F "   *" '{print $2}')
 #        if [[ $ACTIVEWIFI ]]; then
 #            ACTIVEWIFIPRIORITY=$(nmcli con show $ACTIVEWIFI | grep autoconnect-priority | awk '{print $2}')
+#            SSID2="$(jq .ssid /home/savvy/customer_info | sed 's/^\"//; s/\"$//')" #customer wifi ssid
+#
 #            if [[ $ACTIVEWIFIPRIORITY != 200 && $(nmcli device wifi list | grep "$SSID2") ]]; then
-#                nmcli con up $SSID2
+#                nmcli con up "$SSID2"
 #            fi
 #        fi
     fi
