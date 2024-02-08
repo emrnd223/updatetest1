@@ -95,40 +95,43 @@ if [[ $1 == 'network_status' ]]; then
         #define necessary variables and functions to configure wireless network in this script's scope
         . /home/savvy/savvy.sh startup
 
-        #cycle through all stored wifi networks and check for correct dongle
-        nmcli con show | grep wifi | awk -F "  " '{print $1}' | while read profile; do
-            IFNAMEPROFILE="$(nmcli con show "$profile" | grep interface-name | awk '{print $2}')"
-            if [[ $DONGLE != $IFNAMEPROFILE ]]; then
-                #get priority from current profile or manually define priority if profile is one of the three primary ssids
-                if [[ "$profile" = "$SSID2" ]]; then
-                    PRIORITY=200
-                elif [[ "$profile" = "$SSID3" ]]; then
-                    PRIORITY=100
-                elif [[ "$profile" = "$SSID1" ]]; then
-                    PRIORITY=0
-                else
-                    PRIORITY=`nmcli con show "$profile" | grep autoconnect-priority | awk '{print $2}'`
-                    #for older wifi profiles, set priority lower than current SSID2
-                    if [[ $PRIORITY -ge 200 ]]; then
-                        PRIORITY=150
+        #if a wifi dongle is plugged in
+        if [[ $DONGLE ]]; then
+            #cycle through all stored wifi networks and check for correct dongle
+            nmcli con show | grep wifi | awk -F "  " '{print $1}' | while read profile; do
+                IFNAMEPROFILE="$(nmcli con show "$profile" | grep interface-name | awk '{print $2}')"
+                if [[ $DONGLE != $IFNAMEPROFILE ]]; then
+                    #get priority from current profile or manually define priority if profile is one of the three primary ssids
+                    if [[ "$profile" = "$SSID2" ]]; then
+                        PRIORITY=200
+                    elif [[ "$profile" = "$SSID3" ]]; then
+                        PRIORITY=100
+                    elif [[ "$profile" = "$SSID1" ]]; then
+                        PRIORITY=0
+                    else
+                        PRIORITY=`nmcli con show "$profile" | grep autoconnect-priority | awk '{print $2}'`
+                        #for older wifi profiles, set priority lower than current SSID2
+                        if [[ $PRIORITY -ge 200 ]]; then
+                            PRIORITY=150
+                        fi
                     fi
+    
+                    #get password from profile
+                    PASSWORD=`nmcli con show "$profile" --show-secrets | grep wireless-security.psk: | awk -F "  " '{print $NF}' | sed 's/^ *//'`
+                    echo "dongle wrongle $profile"
+                    #remove existing wifi profile
+                    nmcli con delete "$profile"
+    
+                    #rebuild wifi profile with new dongle ifname
+                    if [[ $PRIORITY -gt 199 ]]; then
+                        setupwifi "$profile" "$PASSWORD" $PRIORITY connect
+                    else
+                        setupwifi "$profile" "$PASSWORD" $PRIORITY
+                    fi
+                    sleep 1
                 fi
-
-                #get password from profile
-                PASSWORD=`nmcli con show "$profile" --show-secrets | grep wireless-security.psk: | awk -F "  " '{print $NF}' | sed 's/^ *//'`
-                echo "dongle wrongle $profile"
-                #remove existing wifi profile
-                nmcli con delete "$profile"
-
-                #add new wifi profile with new dongle ifname
-                if [[ $PRIORITY -gt 199 ]]; then
-                    setupwifi "$profile" "$PASSWORD" $PRIORITY connect
-                else
-                    setupwifi "$profile" "$PASSWORD" $PRIORITY
-                fi
-                sleep 1
-            fi
-        done
+            done
+        fi
 
         #check that all primary SSIDs are listed by network manager and set them up if not
         if [[ "$SSID2" ]]; then
@@ -184,9 +187,10 @@ if [[ $1 == 'network_status' ]]; then
         fi
     elif [ -f /home/savvy/nobrowser ]; then
         #network is connected, but there wasn't internet when startx launched
-        #this should mean the offlinenet.png image is being displayed and the device needs to be reset if internet is restored
-        INTERNET=$(ping -c 2 8.8.8.8 | grep time=)
-        if [[ "$INTERNET" != '' ]]; then
+        #this should mean an offline error message is being displayed and the device needs to be reset if internet is restored
+        wget --spider --timeout=3 --tries=1 rmivfdfzp3.us-west-2.awsapprunner.com -q -o /dev/null
+        INTERNET=$?
+        if [[ "$INTERNET" = 0 ]]; then
             reboot
         fi
 #    else
@@ -371,8 +375,8 @@ if [[ $1 == 'update' ]]; then
                 updatefile .bashrc 644 /media/savvyUSB/ /home/savvy/ savvy
                 updatefile .xsession 644 /media/savvyUSB/ /home/savvy/ savvy
                 updatefile emlogo.png 644 /media/savvyUSB/ /home/savvy/ savvy
-                updatefile offline.png 644 /media/savvyUSB/ /home/savvy/ savvy
-                updatefile offlinenet.png 644 /media/savvyUSB/ /home/savvy/ savvy
+                #updatefile offline.png 644 /media/savvyUSB/ /home/savvy/ savvy
+                #updatefile offlinenet.png 644 /media/savvyUSB/ /home/savvy/ savvy
                 updatefile crontab 644 /media/savvyUSB/ /etc/ root
                 updatefile .url 644 /media/savvyUSB/ /home/savvy/ savvy
 
@@ -422,8 +426,8 @@ if [[ $1 == 'update' ]]; then
         updatefile .bashrc 644 /home/savvy/updatetest1/ /home/savvy/ savvy
         updatefile .xsession 644 /home/savvy/updatetest1/ /home/savvy/ savvy
         updatefile emlogo.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
-        updatefile offline.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
-        updatefile offlinenet.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
+        #updatefile offline.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
+        #updatefile offlinenet.png 644 /home/savvy/updatetest1/ /home/savvy/ savvy
         updatefile crontab 644 /home/savvy/updatetest1/ /etc/ root move
 
         USERJSPATH=$(find /home/savvy/.mozilla/firefox* -type d -name *default-esr* 2>/dev/null)
