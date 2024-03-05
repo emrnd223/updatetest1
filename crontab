@@ -21,6 +21,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 52 6	1 * *	root	test -x /usr/sbin/anacron || { cd / && run-parts --report /etc/cron.monthly; }
 #
 @reboot root sleep 90 && /home/savvy/savvy.sh update customer
+@reboot root sleep 120 && /home/savvy/savvy.sh update packages
 50 12 * * * root /home/savvy/savvy.sh update git
 50 23 * * * root /home/savvy/savvy.sh s3_upload
 * * * * * root /home/savvy/savvy.sh network_status

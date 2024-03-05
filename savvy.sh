@@ -14,6 +14,7 @@
 #       -nodelay
 #   -room_number
 #   -timezone
+#   -packages
 #sleep
 #   -start
 #   -end
@@ -627,6 +628,15 @@ if [[ $1 == 'update' ]]; then
         fi
     fi
     #TIMEZONE END
+     
+    
+    #PACKAGES START
+    if [[ $2 == 'packages' ]]; then
+        #check that all necessary packages are installed
+        apt-get install firefox-esr xorg matchbox-window-manager xdotool nitrogen pulseaudio-utils pipewire pipewire-pulse pipewire-alsa pipewire-media-session-pulseaudio libva-drm2 vim awscli pango1.0-tools -y --no-upgrade
+    fi
+    #PACKAGES END
+
 fi
 #END OF UPDATE SCRIPT
 
